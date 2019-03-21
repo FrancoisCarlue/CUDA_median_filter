@@ -12,12 +12,12 @@ __global__ void kernelMedian( const IMG_TYPE * __restrict__ in, IMG_TYPE *output
 	int row = blockIdx.y * blockDim.y + threadIdx.y;
 	int col = blockIdx.x * blockDim.x + threadIdx.x;
 	unsigned char filterVector[9] = {0,0,0,0,0,0,0,0,0};
-	if((row==0) || (col==0) || (row==pitch-1) || (col==pitch-1))
+	if((row==0) || (col==0) || (row==pitch-1) || (col==j_dim-1))
 		output[row*j_dim+col] = 0; //Deal with boundry conditions
 	else {
 		for (int x = 0; x < WINDOW_SIZE; x++) {
 			for (int y = 0; y < WINDOW_SIZE; y++){
-				filterVector[x*WINDOW_SIZE+y] = in[(row+x-1)*pitch+(col+y-1)];   // setup the filterign window.
+				filterVector[x*WINDOW_SIZE+y] = in[(row+x-1)*j_dim+(col+y-1)];   // setup the filterign window.
 			}
 		}
 		for (int i = 0; i < 9; i++) {
