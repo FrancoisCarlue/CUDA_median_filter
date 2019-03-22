@@ -36,4 +36,80 @@ __global__ void kernelMedian( const IMG_TYPE * __restrict__ in, IMG_TYPE *output
 
 
 
+template<class IMG_TYPE> 
+__global__ void medianFilterSharedKernel(const IMG_TYPE * __restrict__ inputImageKernel, IMG_TYPE *outputImagekernel, int imageWidth, int imageHeight)
+{
+	//Set the row and col value for each thread.
+	int row = blockIdx.y * blockDim.y + threadIdx.y;
+	int col = blockIdx.x * blockDim.x + threadIdx.x;
+	__shared__ unsigned char sharedmem[(TILE_SIZE+2)]  [(TILE_SIZE+2)];  //initialize shared memory
+	//Take some values.
+	bool is_x_left = (threadIdx.x == 0), is_x_right = (threadIdx.x == TILE_SIZE-1);
+	bool is_y_top = (threadIdx.y == 0), is_y_bottom = (threadIdx.y == TILE_SIZE-1);
+
+	//Initialize with zero
+	if(is_x_left)
+		sharedmem[threadIdx.x][threadIdx.y+1] = 0;
+	else if(is_x_right)
+		sharedmem[threadIdx.x + 2][threadIdx.y+1]=0;
+	if (is_y_top){
+		sharedmem[threadIdx.x+1][threadIdx.y] = 0;
+		if(is_x_left)
+			sharedmem[threadIdx.x][threadIdx.y] = 0;
+		else if(is_x_right)
+			sharedmem[threadIdx.x+2][threadIdx.y] = 0;
+	}
+	else if (is_y_bottom){
+		sharedmem[threadIdx.x+1][threadIdx.y+2] = 0;
+		if(is_x_right)
+			sharedmem[threadIdx.x+2][threadIdx.y+2] = 0;
+		else if(is_x_left)
+			sharedmem[threadIdx.x][threadIdx.y+2] = 0;
+	}
+
+	//Setup pixel values
+	sharedmem[threadIdx.x+1][threadIdx.y+1] = inputImageKernel[row*imageWidth+col];
+	//Check for boundry conditions.
+	if(is_x_left && (col>0))
+		sharedmem[threadIdx.x][threadIdx.y+1] = inputImageKernel[row*imageWidth+(col-1)];
+	else if(is_x_right && (col<imageWidth-1))
+		sharedmem[threadIdx.x + 2][threadIdx.y+1]= inputImageKernel[row*imageWidth+(col+1)];
+	if (is_y_top && (row>0)){
+		sharedmem[threadIdx.x+1][threadIdx.y] = inputImageKernel[(row-1)*imageWidth+col];
+		if(is_x_left)
+			sharedmem[threadIdx.x][threadIdx.y] = inputImageKernel[(row-1)*imageWidth+(col-1)];
+		else if(is_x_right )
+			sharedmem[threadIdx.x+2][threadIdx.y] = inputImageKernel[(row-1)*imageWidth+(col+1)];
+	}
+	else if (is_y_bottom && (row<imageHeight-1)){
+		sharedmem[threadIdx.x+1][threadIdx.y+2] = inputImageKernel[(row+1)*imageWidth + col];
+		if(is_x_right)
+			sharedmem[threadIdx.x+2][threadIdx.y+2] = inputImageKernel[(row+1)*imageWidth+(col+1)];
+		else if(is_x_left)
+			sharedmem[threadIdx.x][threadIdx.y+2] = inputImageKernel[(row+1)*imageWidth+(col-1)];
+	}
+
+	__syncthreads();   //Wait for all threads to be done.
+
+	//Setup the filter.
+	unsigned char filterVector[9] = {sharedmem[threadIdx.x][threadIdx.y], sharedmem[threadIdx.x+1][threadIdx.y], sharedmem[threadIdx.x+2][threadIdx.y],
+																	 sharedmem[threadIdx.x][threadIdx.y+1], sharedmem[threadIdx.x+1][threadIdx.y+1], sharedmem[threadIdx.x+2][threadIdx.y+1],
+																	 sharedmem[threadIdx.x] [threadIdx.y+2], sharedmem[threadIdx.x+1][threadIdx.y+2], sharedmem[threadIdx.x+2][threadIdx.y+2]};
+
+
+	{
+		for (int i = 0; i < 9; i++) {
+			for (int j = i + 1; j < 9; j++) {
+				if (filterVector[i] > filterVector[j]) {
+					//Swap Values.
+					char tmp = filterVector[i];
+					filterVector[i] = filterVector[j];
+					filterVector[j] = tmp;
+				}
+			}
+		}
+		outputImagekernel[row*imageWidth+col] = filterVector[4];   //Set the output image values.
+	}
+}
+
  
