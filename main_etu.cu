@@ -262,7 +262,7 @@ void run_test(int argc, char **argv, int r, int ppt, IMG_TYPE flag){
   sdkResetTimer(&timer);
   sdkStartTimer(&timer);
   for (ct=0; ct<100 ; ct++)
-	 kernelMedian<<< dimGrid, dimBlock, 0 >>>(d_inc, d_outc, L, h_dim) ;
+	 kernelMedian<<< dimGrid, dimBlock, 0 >>>(d_inc, d_outc, L, H) ;
   cudaThreadSynchronize() ;
   sdkStopTimer(&timer);
 
